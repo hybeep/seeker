@@ -1,4 +1,4 @@
-#Seeker
+#seeker
 
 A server (server.js) must be running on a computer. When a client (client.js) is launched, you can run the next commands:
 
