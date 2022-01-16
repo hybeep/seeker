@@ -11,12 +11,13 @@ const consts = {
         PING: (ip) => {
             return (isWin) ? `ping ${ip}` : (isMac || isLinux) ? `ping ${ip} -c 4 ` : 0;
         },
-        GET_SERVERS: '/get_servers',
-        CONNECT_TO_SERVER: /^\/connect_to_server\s\d+$/,
-        GET_ROOMS: '/get_rooms',
-        JOIN_TO_ROOM: /^\/join_to_room\s\w+$/,
-        LEAVE_ROOM: '/leave_room',
-        LEAVE_SERVER: '/leave_server',
+        PATH: /^\/path\s(.+)\/([^\/]+)$/,
+        SERVERS: '/servers',
+        CONNECT: /^\/connect\s\d+$/,
+        ROOMS: '/rooms',
+        JOIN: /^\/join\s\w+$/,
+        LEAVE: '/leave',
+        DISCONNECT: '/disconnect',
         EXIT: '/exit',
     },
     FUNCTIONS: {
@@ -49,6 +50,7 @@ const consts = {
     REGEX: {
         IP: /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
         number: /\d+/,
+        file: /^(.+)\/([^\/]+)$/,
     },
     SERVER: {
         CONN_STATUS: {
@@ -69,8 +71,10 @@ const consts = {
             JOIN_ROOM: 'joinRoom',
             NOTIFY_JOIN_ROOM: 'notifyJoinRoom',
             SEND_MESSAGE: 'sendMessage',
-            EMIT_MESSAGE: 'emitMessage',
+            SEND_FILE: 'sendFile',
             EMIT_CHAT: 'emitChat',
+            EMIT_MESSAGE: 'emitMessage',
+            EMIT_FILE: 'emitFile',
             EMIT_NOTIFICATION: 'emitNotification',
             LEAVE_ROOM: 'leaveRoom',
             NOTIFY_LEAVE_ROOM: 'notifyLeaveRoom',

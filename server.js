@@ -2,8 +2,9 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { consts } from './consts.js';
 
+const fiftyMillionFables = 50e6;
 const httpServer = createServer();
-const io = new Server(httpServer);
+const io = new Server(httpServer, {maxHttpBufferSize: fiftyMillionFables});
 const SERVER = consts.SERVER;
 const REGEX = consts.REGEX;
 let chats = {};
@@ -30,8 +31,8 @@ io.on(SERVER.EVENTS.CONNECTION, (socket) => {
   socket.on(SERVER.EVENTS.JOIN_ROOM, (room) => {
     if (room === '') {
       emitError(SERVER.ERROR_CODES.EMPTY_VALUE);
-      } else if (getNameRooms().includes(room) && checkDuplicateSocket(room)) {
-        emitError(SERVER.ERROR_CODES.DUPLICATED_SOCKET);
+    } else if (getNameRooms().includes(room) && checkDuplicateSocket(room)) {
+      emitError(SERVER.ERROR_CODES.DUPLICATED_SOCKET);
     } else {
       if (!getNameRooms().includes(room)) {
         chats[room] = [`${ip} created the room.`];
@@ -52,6 +53,12 @@ io.on(SERVER.EVENTS.CONNECTION, (socket) => {
   socket.on(SERVER.EVENTS.SEND_MESSAGE, (obj) => {
     chats[obj.room].push(`${ip}: ${obj.message}`);
     socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(obj.room)).emit(SERVER.EVENTS.EMIT_MESSAGE, { ip: ip, message: obj.message });
+  });
+
+  socket.on(SERVER.EVENTS.SEND_FILE, (obj) => {
+    chats[obj.room].push(`${ip} sent ${obj.fileName}.`);
+    obj.ip = ip;
+    socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(obj.room)).emit(SERVER.EVENTS.EMIT_FILE, obj);
   });
 
   socket.on(SERVER.EVENTS.LEAVE_ROOM, (room) => {

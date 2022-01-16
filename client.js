@@ -2,6 +2,7 @@ import { io } from 'socket.io-client';
 import { net } from './network.js';
 import { rdln } from './readline.js';
 import { consts } from './consts.js';
+import { filesys } from './filesystem.js';
 
 const SERVER = consts.SERVER;
 const FUNCTIONS = consts.FUNCTIONS;
@@ -42,6 +43,7 @@ async function connect(ip) {
 
     let socket;
     let room;
+    let defaultPath;
 
     await connection(ip, SERVER.CONN_STATUS.CONN)
         .then(($socket) => { socket = $socket; })
@@ -76,6 +78,13 @@ async function connect(ip) {
         callChat();
     });
 
+    socket.on(SERVER.EVENTS.EMIT_FILE, (obj) => {
+        cleanLastLine();
+        console.log(`${obj.ip} sent ${obj.fileName}`);
+        filesys.decodeFile(obj.data, `${defaultPath}/${obj.fileName}`);
+        callChat();
+    });
+
     socket.on(SERVER.EVENTS.EMIT_NOTIFICATION, (notif) => {
         cleanLastLine();
         console.log(notif);
@@ -99,7 +108,6 @@ async function connect(ip) {
             console.log(`Couldn't join to the room.`);
             callChat();
         } else if (err === SERVER.ERROR_CODES.LEAVE_ERROR) {
-            cleanLastLine();
             console.log(`Couldn't leave the room.`);
             callChat();
         }
@@ -121,21 +129,40 @@ async function connect(ip) {
     function callChat() {
         rdln.chat()
             .then((answer) => {
-                if (answer === COMMANDS.LEAVE_ROOM) {
-                    socket.emit(SERVER.EVENTS.LEAVE_ROOM, room);
-                } else if (answer === COMMANDS.GET_ROOMS) {
-                    socket.emit(SERVER.EVENTS.GET_ROOMS);
-                } else if (COMMANDS.JOIN_TO_ROOM.test(answer)) {
-                    joinRoom(answer.split(' ')[1]);
-                } else if (answer === COMMANDS.LEAVE_SERVER) {
-                    closeSocket();
+                if (COMMANDS.PATH.test(answer)) {
+                    defaultPath = answer.replace(/\/path\s/, '');
+                    filesys.existsOrCreate(defaultPath);
+                    callChat();
                 } else {
                     if (room) {
-                        socket.emit(SERVER.EVENTS.SEND_MESSAGE, { room: room, message: answer });
-                        callChat();
+                        if (answer === COMMANDS.LEAVE) {
+                            socket.emit(SERVER.EVENTS.LEAVE_ROOM, room);
+                        } else if (REGEX.file.test(answer)) {
+                            filesys.encodeFile(answer)
+                                .then((obj) => {
+                                    obj.room = room;
+                                    socket.emit(SERVER.EVENTS.SEND_FILE, obj);
+                                    callChat();
+                                }).catch((err) => {
+                                    console.log('Not found file.');
+                                    callChat();
+                                });
+                        } else {
+                            socket.emit(SERVER.EVENTS.SEND_MESSAGE, { room: room, message: answer });
+                            callChat();
+                        }
                     } else {
-                        console.log('Invalid command.')
-                        callChat();
+                        if (answer === COMMANDS.ROOMS) {
+                            socket.emit(SERVER.EVENTS.GET_ROOMS);
+                        } else if (COMMANDS.JOIN.test(answer)) {
+                            joinRoom(answer.split(' ')[1]);
+                        } else if (answer === COMMANDS.DISCONNECT) {
+                            closeSocket();
+                        } else {
+                            cleanLastLine();
+                            console.log('Invalid command.')
+                            callChat();
+                        }
                     }
                 }
             })
@@ -223,9 +250,9 @@ function callRLConnServer(noServer) {
 function callInCmd() {
     rdln.chat()
         .then((answer) => {
-            if (answer === COMMANDS.GET_SERVERS) {
+            if (answer === COMMANDS.SERVERS) {
                 callArpa();
-            } else if (COMMANDS.CONNECT_TO_SERVER.test(answer)) {
+            } else if (COMMANDS.CONNECT.test(answer)) {
                 callRLConnServer(REGEX.number.exec(answer)[0]);
             } else if (answer === COMMANDS.EXIT) {
                 rdln.callRLClose();
