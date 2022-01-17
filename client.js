@@ -42,8 +42,11 @@ async function tryConnect(ips) {
 async function connect(ip) {
 
     let socket;
-    let room;
-    let defaultPath;
+    let defaultPath = '.';
+    let isInRoom = false;
+
+    const setDefaultPath = (path) => { defaultPath = path };
+    const getDefaultPath = () => defaultPath;
 
     await connection(ip, SERVER.CONN_STATUS.CONN)
         .then(($socket) => { socket = $socket; })
@@ -61,8 +64,8 @@ async function connect(ip) {
     });
 
     socket.on(SERVER.EVENTS.NOTIFY_JOIN_ROOM, ($room) => {
-        room = $room;
-        console.log(`You have joined ${room} room.`);
+        isInRoom = true;
+        console.log(`You have joined ${$room} room.`);
         callChat();
     });
 
@@ -80,8 +83,13 @@ async function connect(ip) {
 
     socket.on(SERVER.EVENTS.EMIT_FILE, (obj) => {
         cleanLastLine();
-        console.log(`${obj.ip} sent ${obj.fileName}`);
-        filesys.decodeFile(obj.data, `${defaultPath}/${obj.fileName}`);
+        if (obj.emmited) {
+            console.log(`Downloading file ${obj.fileName} sent by ${obj.ip}`);
+            filesys.decodeFile(obj.data, `${getDefaultPath()}/${obj.fileName}`);
+        } else {
+            console.log(`${obj.ip} sent ${obj.fileName}`);
+            filesys.decodeFile(obj.data, `${getDefaultPath()}/${obj.fileName}`);
+        }
         callChat();
     });
 
@@ -92,7 +100,7 @@ async function connect(ip) {
     });
 
     socket.on(SERVER.EVENTS.NOTIFY_LEAVE_ROOM, ($room) => {
-        room = undefined;
+        isInRoom = false;
         console.log(`You have left ${$room} room.`);
         callChat();
     });
@@ -104,8 +112,14 @@ async function connect(ip) {
         } else if (err === SERVER.ERROR_CODES.EMPTY_VALUE) {
             console.log('Room name cannot be empty.');
             callChat();
+        } else if (err === SERVER.ERROR_CODES.JOINED_ALREADY) {
+            console.log('You are already in a room.');
+            callChat();
+        } else if (err === SERVER.ERROR_CODES.SEND_ERROR) {
+            console.log(`You are not in that room.`);
+            callChat();
         } else if (err === SERVER.ERROR_CODES.JOIN_ERROR) {
-            console.log(`Couldn't join to the room.`);
+            console.log(`Couldn't join the room.`);
             callChat();
         } else if (err === SERVER.ERROR_CODES.LEAVE_ERROR) {
             console.log(`Couldn't leave the room.`);
@@ -130,25 +144,25 @@ async function connect(ip) {
         rdln.chat()
             .then((answer) => {
                 if (COMMANDS.PATH.test(answer)) {
-                    defaultPath = answer.replace(/\/path\s/, '');
-                    filesys.existsOrCreate(defaultPath);
+                    setDefaultPath(answer.replace(/\/path\s/, ''));
+                    filesys.existsOrCreate(getDefaultPath());
                     callChat();
                 } else {
-                    if (room) {
+                    if (isInRoom) {
                         if (answer === COMMANDS.LEAVE) {
-                            socket.emit(SERVER.EVENTS.LEAVE_ROOM, room);
+                            socket.emit(SERVER.EVENTS.LEAVE_ROOM);
                         } else if (REGEX.file.test(answer)) {
                             filesys.encodeFile(answer)
                                 .then((obj) => {
-                                    obj.room = room;
                                     socket.emit(SERVER.EVENTS.SEND_FILE, obj);
+                                    console.log('You sent a file.')
                                     callChat();
                                 }).catch((err) => {
                                     console.log('Not found file.');
                                     callChat();
                                 });
                         } else {
-                            socket.emit(SERVER.EVENTS.SEND_MESSAGE, { room: room, message: answer });
+                            socket.emit(SERVER.EVENTS.SEND_MESSAGE, answer);
                             callChat();
                         }
                     } else {
@@ -160,11 +174,12 @@ async function connect(ip) {
                             closeSocket();
                         } else {
                             cleanLastLine();
-                            console.log('Invalid command.')
+                            console.log('Invalid command.');
                             callChat();
                         }
                     }
                 }
+
             })
             .catch((err) => {
                 rdln.removeListeners();

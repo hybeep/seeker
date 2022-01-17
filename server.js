@@ -2,16 +2,20 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { consts } from './consts.js';
 
-const fiftyMillionFables = 50e6;
-const httpServer = createServer();
-const io = new Server(httpServer, {maxHttpBufferSize: fiftyMillionFables});
 const SERVER = consts.SERVER;
 const REGEX = consts.REGEX;
+const fiftyMillionFables = consts.SYSTEM.MAX_FILE_SIZE;
+const httpServer = createServer();
+const io = new Server(httpServer, { maxHttpBufferSize: fiftyMillionFables });
 let chats = {};
+let files = {};
 
 io.on(SERVER.EVENTS.CONNECTION, (socket) => {
 
   let ip = substractIP(socket.request.connection.remoteAddress);
+  let room;
+  const setRoom = ($room) => { room = $room };
+  const getRoom = () => room;
 
   socket.emit(SERVER.EVENTS.CONN_STATUS, (status) => {
     if (status === SERVER.CONN_STATUS.TEST) {
@@ -25,55 +29,73 @@ io.on(SERVER.EVENTS.CONNECTION, (socket) => {
   });
 
   socket.on(SERVER.EVENTS.GET_ROOMS, () => {
-    socket.emit(SERVER.EVENTS.AVAILABLE_ROOMS, getRooms());
+    if (getRoom()) { emitError(SERVER.ERROR_CODES.JOINED_ALREADY); }
+    else { socket.emit(SERVER.EVENTS.AVAILABLE_ROOMS, getRooms()); }
   });
 
-  socket.on(SERVER.EVENTS.JOIN_ROOM, (room) => {
-    if (room === '') {
-      emitError(SERVER.ERROR_CODES.EMPTY_VALUE);
-    } else if (getNameRooms().includes(room) && checkDuplicateSocket(room)) {
-      emitError(SERVER.ERROR_CODES.DUPLICATED_SOCKET);
+  socket.on(SERVER.EVENTS.JOIN_ROOM, ($room) => {
+    if (getRoom()) {
+      emitError(SERVER.ERROR_CODES.JOIN_ERROR);
     } else {
-      if (!getNameRooms().includes(room)) {
-        chats[room] = [`${ip} created the room.`];
-      }
-      try {
-        socket.join(SERVER.FUNCTIONS.setRoomName(room));
-        console.log(`${ip} joined to ${room}`);
-        socket.emit(SERVER.EVENTS.NOTIFY_JOIN_ROOM, room);
-        if (chats[room] !== []) socket.emit(SERVER.EVENTS.EMIT_CHAT, chats[room]);
-        chats[room].push(`${ip} has joined.`);
-        socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(room)).emit(SERVER.EVENTS.EMIT_NOTIFICATION, `${ip} has joined.`);
-      } catch (err) {
-        emitError(SERVER.ERROR_CODES.JOIN_ERROR);
+      if ($room === '') {
+        emitError(SERVER.ERROR_CODES.EMPTY_VALUE);
+      } else if (getNameRooms().includes($room) && checkDuplicateSocket($room)) {
+        emitError(SERVER.ERROR_CODES.DUPLICATED_SOCKET);
+      } else {
+        if (!getNameRooms().includes($room)) {
+          chats[$room] = [`${ip} created the room.`];
+          files[$room] = [];
+        }
+        try {
+          socket.join(SERVER.FUNCTIONS.setRoomName($room));
+          console.log(`${ip} joined to ${$room}`);
+          socket.emit(SERVER.EVENTS.NOTIFY_JOIN_ROOM, $room);
+          if (chats[$room] !== []) socket.emit(SERVER.EVENTS.EMIT_CHAT, chats[$room]);
+          files[$room].forEach((obj) => {
+            obj.emmited = true;
+            socket.emit(SERVER.EVENTS.EMIT_FILE, obj);
+          });
+          chats[$room].push(`${ip} has joined.`);
+          socket.broadcast.to(SERVER.FUNCTIONS.setRoomName($room)).emit(SERVER.EVENTS.EMIT_NOTIFICATION, `${ip} has joined.`);
+          setRoom($room);
+        } catch (err) {
+          emitError(SERVER.ERROR_CODES.JOIN_ERROR);
+        }
       }
     }
   });
 
-  socket.on(SERVER.EVENTS.SEND_MESSAGE, (obj) => {
-    chats[obj.room].push(`${ip}: ${obj.message}`);
-    socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(obj.room)).emit(SERVER.EVENTS.EMIT_MESSAGE, { ip: ip, message: obj.message });
+  socket.on(SERVER.EVENTS.SEND_MESSAGE, (msg) => {
+    if (getRoom()) {
+      chats[getRoom()].push(`${ip}: ${msg}`);
+      socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(getRoom())).emit(SERVER.EVENTS.EMIT_MESSAGE, { ip: ip, message: msg });
+    } else {
+      emitError(SERVER.ERROR_CODES.SEND_ERROR);
+    }
   });
 
   socket.on(SERVER.EVENTS.SEND_FILE, (obj) => {
-    chats[obj.room].push(`${ip} sent ${obj.fileName}.`);
-    obj.ip = ip;
-    socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(obj.room)).emit(SERVER.EVENTS.EMIT_FILE, obj);
+    if (getRoom()) {
+      chats[getRoom()].push(`${ip} sent ${obj.fileName}.`);
+      obj.ip = ip;
+      obj.emmited = false;
+      files[getRoom()].push(obj);
+      socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(getRoom())).emit(SERVER.EVENTS.EMIT_FILE, obj);
+    } else {
+      emitError(SERVER.ERROR_CODES.SEND_ERROR);
+    }
   });
 
-  socket.on(SERVER.EVENTS.LEAVE_ROOM, (room) => {
-    try {
-      socket.leave(SERVER.FUNCTIONS.setRoomName(room));
-      console.log(`${ip} left ${room} room.`);
-      socket.emit(SERVER.EVENTS.NOTIFY_LEAVE_ROOM, room);
-      chats[room].push(`${ip} has left.`);
-      socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(room)).emit(SERVER.EVENTS.EMIT_NOTIFICATION, `${ip} has left.`);
-    } catch (err) {
+  socket.on(SERVER.EVENTS.LEAVE_ROOM, () => {
+    if (getRoom()) {
+      leaveRoom();
+    } else {
       emitError(SERVER.ERROR_CODES.LEAVE_ERROR);
     }
   });
 
   socket.on(SERVER.EVENTS.DISCONNECT, () => {
+    if (getRoom()) leaveRoom();
     console.log(`${ip} left`);
   });
 
@@ -107,11 +129,28 @@ io.on(SERVER.EVENTS.CONNECTION, (socket) => {
     return availableRooms;
   }
 
+  function leaveRoom() {
+    try {
+      socket.leave(SERVER.FUNCTIONS.setRoomName(getRoom()));
+      console.log(`${ip} left ${getRoom()} room.`);
+      socket.emit(SERVER.EVENTS.NOTIFY_LEAVE_ROOM, getRoom());
+      chats[getRoom()].push(`${ip} has left.`);
+      socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(getRoom())).emit(SERVER.EVENTS.EMIT_NOTIFICATION, `${ip} has left.`);
+      if (!getNameRooms().includes(getRoom())) {
+        delete chats[getRoom()];
+        delete files[getRooms()];
+      }
+      setRoom(undefined);
+    } catch (err) {
+      emitError(SERVER.ERROR_CODES.LEAVE_ERROR);
+    }
+  }
+
   function emitError(error) {
     socket.emit(SERVER.EVENTS.ERROR, error);
   }
 
-  function getRoom(room) {
+  function getRoomSockets(room) {
     let sockets = [];
     io.sockets.adapter.rooms.forEach((value, key) => {
       if (key.startsWith(SERVER.ROOM_INIT)) {
@@ -128,7 +167,7 @@ io.on(SERVER.EVENTS.CONNECTION, (socket) => {
   }
 
   function checkDuplicateSocket(room) {
-    if (getRoom(room).includes(ip)) return true;
+    if (getRoomSockets(room).includes(ip)) return true;
     return false;
   }
 

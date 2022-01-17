@@ -60,7 +60,9 @@ const consts = {
         ERROR_CODES: {
             EMPTY_VALUE: 'emp_val',
             DUPLICATED_SOCKET: 'dup_sock',
+            JOINED_ALREADY: 'joined_already',
             JOIN_ERROR: 'join_error',
+            SEND_ERROR: 'send_error',
             LEAVE_ERROR: 'leave_error',
         },
         EVENTS: {
@@ -95,6 +97,7 @@ const consts = {
     },
     SYSTEM: {
         TIMEOUT: 5000,
+        MAX_FILE_SIZE: 50e6,
     },
 }
 

@@ -2,10 +2,13 @@ import * as fs from 'fs/promises';
 import { consts } from './consts.js';
 
 const REGEX = consts.REGEX;
+const maxSize = consts.SYSTEM.MAX_FILE_SIZE;
 
 const filesys = {
 
     encodeFile: async (url) => {
+        const stat = await fs.stat(url);
+        if (stat.size > maxSize) throw new Error();
         const data = await fs.readFile(url, { encoding: 'base64' });
         let res = REGEX.file.exec(url);
         let lastNumIndex = 0;
