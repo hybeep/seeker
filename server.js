@@ -35,7 +35,7 @@ io.on(SERVER.EVENTS.CONNECTION, (socket) => {
 
   socket.on(SERVER.EVENTS.JOIN_ROOM, ($room) => {
     if (getRoom()) {
-      emitError(SERVER.ERROR_CODES.JOIN_ERROR);
+      emitError(SERVER.ERROR_CODES.JOINED_ALREADY);
     } else {
       if ($room === '') {
         emitError(SERVER.ERROR_CODES.EMPTY_VALUE);
@@ -52,7 +52,6 @@ io.on(SERVER.EVENTS.CONNECTION, (socket) => {
           socket.emit(SERVER.EVENTS.NOTIFY_JOIN_ROOM, $room);
           if (chats[$room] !== []) socket.emit(SERVER.EVENTS.EMIT_CHAT, chats[$room]);
           files[$room].forEach((obj) => {
-            obj.emmited = true;
             socket.emit(SERVER.EVENTS.EMIT_FILE, obj);
           });
           chats[$room].push(`${ip} has joined.`);
@@ -76,13 +75,20 @@ io.on(SERVER.EVENTS.CONNECTION, (socket) => {
 
   socket.on(SERVER.EVENTS.SEND_FILE, (obj) => {
     if (getRoom()) {
-      chats[getRoom()].push(`${ip} sent ${obj.fileName}.`);
+      chats[getRoom()].push(`${ip} sent ${obj.fileName}`);
       obj.ip = ip;
-      obj.emmited = false;
       files[getRoom()].push(obj);
       socket.broadcast.to(SERVER.FUNCTIONS.setRoomName(getRoom())).emit(SERVER.EVENTS.EMIT_FILE, obj);
     } else {
       emitError(SERVER.ERROR_CODES.SEND_ERROR);
+    }
+  });
+
+  socket.on(SERVER.EVENTS.EXPORT_CHAT, () => {
+    if (getRoom()) {
+      socket.emit(SERVER.EVENTS.EMIT_EXPORT_CHAT, {fileName: `${getRoom()}.txt`, chat: chats[getRoom()].join('\n')});
+    } else {
+      emitError(SERVER.ERROR_CODES.EXPORT_CHAT_ERROR);
     }
   });
 

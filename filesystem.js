@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { consts } from './consts.js';
 
 const REGEX = consts.REGEX;
@@ -7,8 +8,7 @@ const maxSize = consts.SYSTEM.MAX_FILE_SIZE;
 const filesys = {
 
     encodeFile: async (url) => {
-        const stat = await fs.stat(url);
-        if (stat.size > maxSize) throw new Error();
+        if (fs.stat(url).size > maxSize) throw new Error();
         const data = await fs.readFile(url, { encoding: 'base64' });
         let res = REGEX.file.exec(url);
         let lastNumIndex = 0;
@@ -27,6 +27,17 @@ const filesys = {
         fs.readdir(url)
             .then((files) => { })
             .catch((err) => { fs.mkdir(url); });
+    },
+
+    writeFile: (url, data) => {
+        fs.writeFile(url, data)
+            .catch((err) => {
+                throw new Error()
+            });
+    },
+
+    getAbsolutePath: (relPath) => {
+        return path.resolve(relPath);
     }
 
 }

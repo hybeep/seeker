@@ -16,6 +16,7 @@ const consts = {
         CONNECT: /^\/connect\s\d+$/,
         ROOMS: '/rooms',
         JOIN: /^\/join\s\w+$/,
+        EXPORT: '/export',
         LEAVE: '/leave',
         DISCONNECT: '/disconnect',
         EXIT: '/exit',
@@ -50,7 +51,7 @@ const consts = {
     REGEX: {
         IP: /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
         number: /\d+/,
-        file: /^(.+)\/([^\/]+)$/,
+        file: /^(.+)\\([^\\]+)$/,
     },
     SERVER: {
         CONN_STATUS: {
@@ -63,6 +64,7 @@ const consts = {
             JOINED_ALREADY: 'joined_already',
             JOIN_ERROR: 'join_error',
             SEND_ERROR: 'send_error',
+            EXPORT_CHAT_ERROR: 'export_chat_error',
             LEAVE_ERROR: 'leave_error',
         },
         EVENTS: {
@@ -78,6 +80,8 @@ const consts = {
             EMIT_MESSAGE: 'emitMessage',
             EMIT_FILE: 'emitFile',
             EMIT_NOTIFICATION: 'emitNotification',
+            EMIT_EXPORT_CHAT: 'emitExportChat',
+            EXPORT_CHAT: 'exportChat',
             LEAVE_ROOM: 'leaveRoom',
             NOTIFY_LEAVE_ROOM: 'notifyLeaveRoom',
             ERROR: 'error',

@@ -42,7 +42,7 @@ async function tryConnect(ips) {
 async function connect(ip) {
 
     let socket;
-    let defaultPath = '.';
+    let defaultPath = filesys.getAbsolutePath('.');
     let isInRoom = false;
 
     const setDefaultPath = (path) => { defaultPath = path };
@@ -83,13 +83,8 @@ async function connect(ip) {
 
     socket.on(SERVER.EVENTS.EMIT_FILE, (obj) => {
         cleanLastLine();
-        if (obj.emmited) {
-            console.log(`Downloading file ${obj.fileName} sent by ${obj.ip}`);
-            filesys.decodeFile(obj.data, `${getDefaultPath()}/${obj.fileName}`);
-        } else {
-            console.log(`${obj.ip} sent ${obj.fileName}`);
-            filesys.decodeFile(obj.data, `${getDefaultPath()}/${obj.fileName}`);
-        }
+        console.log(`Downloading file ${obj.fileName} sent by ${obj.ip} to ${getDefaultPath()}\\${obj.fileName}`);
+        filesys.decodeFile(obj.data, `${getDefaultPath()}\\${obj.fileName}`);
         callChat();
     });
 
@@ -98,6 +93,13 @@ async function connect(ip) {
         console.log(notif);
         callChat();
     });
+
+    socket.on(SERVER.EVENTS.EMIT_EXPORT_CHAT, (obj) => {
+        cleanLastLine();
+        filesys.writeFile(`${getDefaultPath()}\\${obj.fileName}`, obj.chat);
+        console.log(`Chat has been exported to: ${getDefaultPath()}\\${obj.fileName}`);
+        callChat();
+    })
 
     socket.on(SERVER.EVENTS.NOTIFY_LEAVE_ROOM, ($room) => {
         isInRoom = false;
@@ -121,6 +123,8 @@ async function connect(ip) {
         } else if (err === SERVER.ERROR_CODES.JOIN_ERROR) {
             console.log(`Couldn't join the room.`);
             callChat();
+        } else if (err === SERVER.ERROR_CODES.EXPORT_CHAT_ERROR) {
+            console.log(`Couldn't export the chat.`)
         } else if (err === SERVER.ERROR_CODES.LEAVE_ERROR) {
             console.log(`Couldn't leave the room.`);
             callChat();
@@ -146,21 +150,25 @@ async function connect(ip) {
                 if (COMMANDS.PATH.test(answer)) {
                     setDefaultPath(answer.replace(/\/path\s/, ''));
                     filesys.existsOrCreate(getDefaultPath());
+                    setDefaultPath(filesys.getAbsolutePath(getDefaultPath()));
                     callChat();
                 } else {
                     if (isInRoom) {
-                        if (answer === COMMANDS.LEAVE) {
-                            socket.emit(SERVER.EVENTS.LEAVE_ROOM);
-                        } else if (REGEX.file.test(answer)) {
+                        if (REGEX.file.test(answer)) {
+                            answer = filesys.getAbsolutePath(answer);
                             filesys.encodeFile(answer)
                                 .then((obj) => {
                                     socket.emit(SERVER.EVENTS.SEND_FILE, obj);
-                                    console.log('You sent a file.')
+                                    console.log(`You sent ${answer}`);
                                     callChat();
                                 }).catch((err) => {
-                                    console.log('Not found file.');
+                                    console.log(`File not found at ${answer}`);
                                     callChat();
                                 });
+                        } else if (answer === COMMANDS.LEAVE) {
+                            socket.emit(SERVER.EVENTS.LEAVE_ROOM);
+                        } else if (answer === COMMANDS.EXPORT) {
+                            socket.emit(SERVER.EVENTS.EXPORT_CHAT);
                         } else {
                             socket.emit(SERVER.EVENTS.SEND_MESSAGE, answer);
                             callChat();
@@ -251,6 +259,7 @@ function callRLConnServer(noServer) {
             .then(() => {
                 cleanLastLine();
                 console.log(`Connected to ${availableServers[noServer]}`);
+                availableServers = [];
             })
             .catch((err) => {
                 console.log(`Failed connecting to ${availableServers[noServer]}`);
