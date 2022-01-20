@@ -14,7 +14,7 @@ After connecting to a server, you can run the next commands:
 /leave: to leave the room.  
 /disconnect: to disconnect from the server.  
 
-While in a room, you can send a file by simply typing its relative path (use '\') in the chat. 
+While in a room, you can send a file by simply typing its relative path (use '\\') in the chat. 
 
 To exit the program run:
 
